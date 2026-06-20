@@ -19,21 +19,37 @@ import { listEvents, type EventType, type EventSeverity } from "../db/repositori
 export async function registerWs(app: FastifyInstance): Promise<void> {
   await app.register(websocket);
 
-  app.get("/v1/events/stream", { websocket: true }, (socket, req) => {
+  app.get("/v1/events/stream", { websocket: true }, async (socket, req) => {
     const ctx = req.tenant;
     if (!ctx) {
       socket.close(4401, "tenant required");
       return;
     }
-    const since = new Date();
     const channel = `shm:events:${ctx.companyId}`;
 
     // Subscribe to Redis pub/sub for live events.
+    // Await the subscribe ACK before telling the client we're live —
+    // events published between duplicate() and the subscribe ACK would
+    // otherwise be silently dropped.
     const sub = app.redis.duplicate();
-    sub.subscribe(channel).catch(() => {
+    try {
+      await sub.subscribe(channel);
+    } catch {
       socket.close(1011, "subscribe failed");
-    });
+      return;
+    }
+
+    // Tell the client the exact timestamp the subscription became active
+    // so it can issue an accurate backfill request for the gap.
+    socket.send(JSON.stringify({ type: "subscribed", since: new Date().toISOString() }));
+
+    const BACKPRESSURE_LIMIT = 1_048_576; // 1 MB
+
     sub.on("message", (_chan: string, payload: string) => {
+      if (socket.bufferedAmount > BACKPRESSURE_LIMIT) {
+        socket.close(1011, "client too slow");
+        return;
+      }
       try {
         // Push-only — client does not need to reply.
         socket.send(payload);

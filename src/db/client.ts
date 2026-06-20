@@ -1,6 +1,5 @@
 import pg from "pg";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
-import { sql } from "drizzle-orm";
 import * as schema from "./schema.js";
 import type { TenantContext, SystemContext } from "../core/tenant-context.js";
 import { isSystemContext } from "../core/tenant-context.js";
@@ -77,15 +76,29 @@ export async function withTenantDb<T>(
   }
 }
 
-/** Variant for system-level, cross-tenant queries (no company_id set). */
+/**
+ * Variant for system-level, cross-tenant queries (no company_id set).
+ *
+ * IMPORTANT: this function does NOT set app.company_id, so RLS policies
+ * that filter by that setting will see no rows unless the DB role used
+ * by DATABASE_URL has BYPASSRLS, or the policy explicitly allows a NULL
+ * setting. Verify your migration-level RLS grants before adding system
+ * queries against tenant-scoped tables.
+ */
 export async function withSystemDb<T>(
   fn: (db: NodePgDatabase<typeof schema>) => Promise<T>,
 ): Promise<T> {
   const pool = systemPool();
   const client = await pool.connect();
   try {
+    await client.query("BEGIN");
     const db = drizzle(client, { schema });
-    return await fn(db);
+    const result = await fn(db);
+    await client.query("COMMIT");
+    return result;
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
   } finally {
     client.release();
   }

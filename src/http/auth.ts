@@ -26,11 +26,14 @@ declare module "@fastify/jwt" {
       iss?: string;
       aud?: string;
     };
+    // @fastify/jwt copies the payload into req.user verbatim — no camelCase
+    // conversion. Fields are optional because jwtVerify() validates the
+    // signature, not the claim set.
     user: {
-      sub: string;
-      companyId: string;
-      kind: "user" | "service";
-      scope: readonly string[];
+      sub?: string;
+      company_id?: string;
+      kind?: "user" | "service";
+      scope?: readonly string[];
     };
   }
 }
@@ -56,24 +59,17 @@ export function requireUser(app: FastifyInstance) {
     } catch {
       throw err.unauthorized("invalid or missing token");
     }
-    // @fastify/jwt exposes the decoded payload as req.user. Our claim is
-    // snake_case (`company_id`) per the JWT shape; @fastify/jwt does NOT
-    // auto-convert, so we read it off the user object as set by us.
-    const decoded = req.user as unknown as {
-      sub?: string;
-      company_id?: string;
-      kind?: "user" | "service";
-    } | null;
-    if (!decoded?.company_id) {
+    const u = req.user;
+    if (!u?.company_id) {
       throw err.unauthorized("token missing company_id");
     }
-    if (decoded.kind !== "user" && decoded.kind !== "service") {
+    if (u.kind !== "user" && u.kind !== "service") {
       throw err.unauthorized("token missing kind");
     }
     return {
-      companyId: decoded.company_id,
-      subjectId: decoded.sub ?? "unknown",
-      subjectKind: decoded.kind,
+      companyId: u.company_id,
+      subjectId: u.sub ?? "unknown",
+      subjectKind: u.kind,
       requestId: req.id,
     };
   };

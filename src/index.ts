@@ -19,7 +19,6 @@ import { buildServer, startServer } from "./http/server.js";
 import {
   PollingScheduler,
   PollWorker,
-  setSchedulerDeps,
 } from "./polling/scheduler.js";
 import { EventIndexer } from "./workers/event-indexer.js";
 import { scheduleLicenseExpiry, startLicenseExpiryWorker } from "./workers/license-expiry.js";
@@ -35,7 +34,6 @@ async function main(): Promise<void> {
   const budget = new PollBudget(redis);
 
   const deps = { redis, vault, budget };
-  setSchedulerDeps(deps);
 
   // Always run migrations on boot. Cheap with the _migrations guard.
   await runMigrations();
