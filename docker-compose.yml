@@ -12,9 +12,7 @@ services:
       POSTGRES_USER: shm
       POSTGRES_PASSWORD: shm
       POSTGRES_DB: shm
-    # Internal port only; we reach it via host networking from api/worker.
-    expose:
-      - "5432"
+    # No host port mapping: api/worker reach postgres via the compose network.
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -22,15 +20,12 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
-    # Memory cap so the box's 4 GB stays healthy.
     mem_limit: 512m
 
   redis:
     image: redis:7-alpine
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
-    expose:
-      - "6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -42,16 +37,15 @@ services:
 
   migrate:
     # One-shot container that runs the SQL migrations, then exits.
+    image: ssm-api:latest
     build:
       context: .
       dockerfile: Dockerfile
-    image: ssm-api:latest
     profiles: ["migrate"]
     depends_on:
       postgres:
         condition: service_healthy
     env_file: .env
-    network_mode: host
     entrypoint: ["node", "dist/db/migrate.js"]
     restart: "no"
 
@@ -71,10 +65,12 @@ services:
       SHIM_MODE: api
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: "8080"
-    network_mode: host
+    # Bind only on host loopback; Caddy on the host reverse-proxies to this.
+    ports:
+      - "127.0.0.1:8080:8080"
     mem_limit: 384m
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/healthz >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:8080/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -94,7 +90,7 @@ services:
     env_file: .env
     environment:
       SHIM_MODE: worker
-    network_mode: host
+    # Worker makes outbound calls to cameras; no need for host port binding.
     mem_limit: 384m
 
 volumes:
