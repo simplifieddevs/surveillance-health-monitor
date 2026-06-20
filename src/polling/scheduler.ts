@@ -28,8 +28,8 @@ const log = getLogger().child({ component: "polling" });
  * propagate without queue rebuilds.
  */
 
-const COMPANY_TICK_QUEUE = "shm:company-tick";
-const POLL_QUEUE = "shm:device-poll";
+const COMPANY_TICK_QUEUE = "shm-company-tick";
+const POLL_QUEUE = "shm-device-poll";
 
 export interface SchedulerDeps {
   redis: Redis;

@@ -17,7 +17,7 @@ import type { Redis } from "ioredis";
 
 const log = getLogger().child({ component: "license-expiry" });
 
-const QUEUE = "shm:license-expiry";
+const QUEUE = "shm-license-expiry";
 
 export async function scheduleLicenseExpiry(redis: Redis): Promise<void> {
   const q = new Queue(QUEUE, { connection: redis as unknown as ConnectionOptions });
