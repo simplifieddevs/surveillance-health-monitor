@@ -1,6 +1,9 @@
-version: "3.9"
+name: ssm
 
-# Local dev only. Production must use managed Postgres / Redis.
+# Local dev + small-prod single-host deployment.
+# For multi-host or high-availability, split Postgres/Redis onto managed services
+# and run `api`/`worker` on separate hosts.
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -9,8 +12,9 @@ services:
       POSTGRES_USER: shm
       POSTGRES_PASSWORD: shm
       POSTGRES_DB: shm
-    ports:
-      - "5432:5432"
+    # Internal port only; we reach it via host networking from api/worker.
+    expose:
+      - "5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -18,13 +22,15 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    # Memory cap so the box's 4 GB stays healthy.
+    mem_limit: 512m
 
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    ports:
-      - "6379:6379"
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    expose:
+      - "6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -32,6 +38,64 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    mem_limit: 320m
+
+  migrate:
+    # One-shot container that runs the SQL migrations, then exits.
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ssm-api:latest
+    profiles: ["migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    network_mode: host
+    entrypoint: ["node", "dist/db/migrate.js"]
+    restart: "no"
+
+  api:
+    image: ssm-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      SHIM_MODE: api
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: "8080"
+    network_mode: host
+    mem_limit: 384m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/healthz >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  worker:
+    image: ssm-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      SHIM_MODE: worker
+    network_mode: host
+    mem_limit: 384m
 
 volumes:
   pgdata:
