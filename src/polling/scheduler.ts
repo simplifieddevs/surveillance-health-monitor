@@ -9,7 +9,6 @@ import {
   type Device,
 } from "../db/repositories/devices.js";
 import { withResolvedCredential } from "../db/repositories/credentials.js";
-import { requireLicense } from "../db/repositories/licenses.js";
 import { insertEvents } from "../db/repositories/events.js";
 import { CredentialVault } from "../crypto/credential-vault.js";
 import { normalize } from "./normalize.js";
@@ -135,43 +134,39 @@ export class PollWorker {
 
     try {
       await withTenantDb(tenant, async (db) => {
-        // 1. License gate — refuse to poll for an unlicensed company.
-        const lic = await requireLicense(db, tenant);
-        const tier = (await import("../config/license-tiers.js")).LICENSE_TIERS[lic.tier];
-
-        // 2. Load device under tenant scope (RLS guarantees isolation).
+        // 1. Load device under tenant scope (RLS guarantees isolation).
         const device = await loadDevice(db, tenant, deviceId);
 
-        // 3. Acquire concurrency slot — gated by license tier.
-        const release = await deps().budget.acquire(tenant, tier);
-        try {
-          // 4. Pull through the adapter. Credentials are decrypted only
-          //    inside this closure; they never leave this function.
-          await withResolvedCredential(db, tenant, deviceId, deps().vault, async (cred) => {
-            const adapter = adapterFor(device.vendor);
-            const pull = await adapter.pull(
-              { address: device.address, vendorConfig: device.vendorConfig },
-              cred,
-              device.pollCursor,
-            );
+        // NOTE: license enforcement is currently disabled per product
+        // decision. requireLicense() and the concurrency budget are
+        // skipped here. The licenses table, tier config, error codes,
+        // and repo functions are preserved so re-enabling is a code
+        // change at this site, not a migration.
 
-            // 5. Normalize + persist.
-            const normalized = normalize(device, pull.events);
-            if (normalized.length > 0) {
-              await insertEvents(db, normalized);
-            }
+        // 2. Pull through the adapter. Credentials are decrypted only
+        //    inside this closure; they never leave this function.
+        await withResolvedCredential(db, tenant, deviceId, deps().vault, async (cred) => {
+          const adapter = adapterFor(device.vendor);
+          const pull = await adapter.pull(
+            { address: device.address, vendorConfig: device.vendorConfig },
+            cred,
+            device.pollCursor,
+          );
 
-            // 6. Update device status + cursor.
-            const { updateStatus } = await import("../db/repositories/devices.js");
-            await updateStatus(db, tenant, deviceId, {
-              status: pull.status ?? "online",
-              lastSeenAt: new Date(),
-              pollCursor: pull.nextCursor ?? device.pollCursor,
-            });
+          // 3. Normalize + persist.
+          const normalized = normalize(device, pull.events);
+          if (normalized.length > 0) {
+            await insertEvents(db, normalized);
+          }
+
+          // 4. Update device status + cursor.
+          const { updateStatus } = await import("../db/repositories/devices.js");
+          await updateStatus(db, tenant, deviceId, {
+            status: pull.status ?? "online",
+            lastSeenAt: new Date(),
+            pollCursor: pull.nextCursor ?? device.pollCursor,
           });
-        } finally {
-          await release();
-        }
+        });
       });
     } catch (e) {
       // Map ADAPTER_UNAVAILABLE -> device offline. Other errors propagate.

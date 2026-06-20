@@ -5,12 +5,9 @@ import {
   createDevice,
   getDevice,
   listEnabledDevices,
-  countDevices,
   type Vendor,
 } from "../../db/repositories/devices.js";
-import { requireLicense } from "../../db/repositories/licenses.js";
 import { CredentialVault } from "../../crypto/credential-vault.js";
-import { LICENSE_TIERS } from "../../config/license-tiers.js";
 import { err } from "../../core/errors.js";
 
 const VendorEnum = z.enum(["onvif", "hikvision", "dahua", "uniview", "hanwha", "axis"]);
@@ -54,18 +51,12 @@ export const deviceRoutes: FastifyPluginAsync<{ deps: DeviceRoutesDeps }> = asyn
     if (!ctx) throw err.tenantRequired(req.id);
     const body = CreateDeviceBody.parse(req.body);
 
+    // NOTE: license enforcement is currently disabled per product
+    // decision. Tier-based maxDevices gate and requireLicense() are
+    // skipped here. The licenses table, tier config, error codes,
+    // and repo functions are preserved so re-enabling is a code
+    // change at this site, not a migration.
     return withTenantDb(ctx, async (db) => {
-      const lic = await requireLicense(db, ctx);
-      const tier = LICENSE_TIERS[lic.tier];
-
-      // Enforce tier.maxDevices.
-      if (tier.maxDevices !== Number.MAX_SAFE_INTEGER) {
-        const current = await countDevices(db, ctx);
-        if (current >= tier.maxDevices) {
-          throw err.budgetExceeded("devices", tier.maxDevices);
-        }
-      }
-
       const blob = vault.encrypt(body.credentials);
       const created = await createDevice(db, ctx, {
         siteId: body.siteId,

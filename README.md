@@ -20,9 +20,14 @@ TVT LAPI, Hanwha SUNAPI, Axis VAPIX).
   per-ciphertext IV. Decryption happens only inside `withResolvedCredential`
   for the duration of one adapter call. Plaintext is never persisted and
   never crosses a route boundary.
-- **License enforcement at the server.** `requireLicense()` is called by
-  every action that creates devices or runs polls. Tier budgets
-  (maxDevices, maxConcurrentPolls, retention) are enforced centrally.
+- **Licensing is modeled, not enforced.** The `licenses` table, tier
+  config, license-expiry cron, `LICENSE_REQUIRED`/`LICENSE_EXPIRED`/
+  `LICENSE_BUDGET_EXCEEDED` error codes, and `/v1/license` endpoint
+  exist and stay in sync — but the gates are currently off. Adding a
+  device does not require an active license, and the polling worker
+  does not check tier concurrency. To re-enable, restore the calls in
+  `http/routes/devices.ts` and `polling/scheduler.ts` (the code is
+  preserved in comments at both call sites).
 - **Events, not logs.** `Event = (company_id, site_id, device_id, type,
   severity, detected_at, raw_payload, normalized_fields)`. The polling
   worker normalizes vendor output to this shape and inserts.

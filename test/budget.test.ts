@@ -26,4 +26,30 @@ describe("PollBudget", () => {
     expect(LICENSE_TIERS.pro.maxConcurrentPolls).toBe(32);
     expect(LICENSE_TIERS.enterprise.maxConcurrentPolls).toBe(128);
   });
+
+  it("enforcement is currently disabled per product decision", () => {
+    // The license gates in routes and the polling worker are commented
+    // out. The data model (licenses table, tier config, error codes)
+    // is preserved so re-enabling is a behavior toggle. This test is
+    // a regression guard: if someone re-enables enforcement without
+    // updating tests + docs, we'll catch it.
+    //
+    // We strip line-leading whitespace + "//" before matching so the
+    // commented-out example code doesn't trigger a false positive.
+    const stripComments = (s: string) =>
+      s.split("\n").map((l) => l.trim().replace(/^\/\/\s?/, "")).join("\n");
+
+    const fs = require("node:fs");
+    const devicesRoute = stripComments(
+      fs.readFileSync("src/http/routes/devices.ts", "utf8"),
+    );
+    expect(devicesRoute).not.toMatch(/await requireLicense\(/);
+    expect(devicesRoute).not.toMatch(/budgetExceeded\("devices"/);
+
+    const scheduler = stripComments(
+      fs.readFileSync("src/polling/scheduler.ts", "utf8"),
+    );
+    expect(scheduler).not.toMatch(/await requireLicense\(/);
+    expect(scheduler).not.toMatch(/budget\.acquire\(/);
+  });
 });
