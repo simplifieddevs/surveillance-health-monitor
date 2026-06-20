@@ -19,6 +19,10 @@ COPY openapi.yaml ./
 # Compile.
 RUN npm run build
 
+# Move SQL migrations next to the compiled JS so the runtime can find them.
+# `tsc` doesn't copy non-TS assets, so we do it explicitly.
+RUN mkdir -p dist/db/migrations && cp src/db/migrations/*.sql dist/db/migrations/
+
 # --- runtime stage -------------------------------------------------------
 FROM node:20-bookworm-slim AS runtime
 
