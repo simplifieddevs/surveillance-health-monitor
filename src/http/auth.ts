@@ -56,14 +56,24 @@ export function requireUser(app: FastifyInstance) {
     } catch {
       throw err.unauthorized("invalid or missing token");
     }
-    const payload = req.user;
-    if (!payload?.companyId) {
+    // @fastify/jwt exposes the decoded payload as req.user. Our claim is
+    // snake_case (`company_id`) per the JWT shape; @fastify/jwt does NOT
+    // auto-convert, so we read it off the user object as set by us.
+    const decoded = req.user as unknown as {
+      sub?: string;
+      company_id?: string;
+      kind?: "user" | "service";
+    } | null;
+    if (!decoded?.company_id) {
       throw err.unauthorized("token missing company_id");
     }
+    if (decoded.kind !== "user" && decoded.kind !== "service") {
+      throw err.unauthorized("token missing kind");
+    }
     return {
-      companyId: payload.companyId,
-      subjectId: payload.sub,
-      subjectKind: payload.kind,
+      companyId: decoded.company_id,
+      subjectId: decoded.sub ?? "unknown",
+      subjectKind: decoded.kind,
       requestId: req.id,
     };
   };
