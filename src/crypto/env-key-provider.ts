@@ -60,6 +60,14 @@ export class EnvKeyProvider implements KeyProvider {
       this.byVersion.set(explicitVersion, decodeKey("CRED_ENC_KEY", env.CRED_ENC_KEY));
     } else {
       const next = (this.byVersion.size === 0 ? 1 : Math.max(...this.byVersion.keys()) + 1);
+      // Warn loudly: without an explicit version, rotating CRED_ENC_KEY
+      // without also updating CRED_ENC_KEY_VERSIONS will assign version 1
+      // to the new key and make all credentials encrypted with the old
+      // version-1 key unrecoverable. Set CRED_ENC_KEY_VERSION explicitly.
+      console.warn(
+        `[EnvKeyProvider] CRED_ENC_KEY_VERSION not set — auto-assigned version ${next}. ` +
+        "Set CRED_ENC_KEY_VERSION explicitly in .env before rotating keys.",
+      );
       this.byVersion.set(next, decodeKey("CRED_ENC_KEY", env.CRED_ENC_KEY));
     }
   }

@@ -67,7 +67,9 @@ function parseArgs(argv: readonly string[]): CliOptions {
   const kindRaw = get("--kind") ?? "user";
   const scopeRaw = get("--scope") ?? "";
   const ttlRaw = get("--ttl") ?? "3600";
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!companyId) throw new Error("--company <uuid> is required");
+  if (!UUID_RE.test(companyId)) throw new Error("--company must be a valid UUID (got: " + companyId + ")");
   if (!sub) throw new Error("--sub <id> is required");
   if (kindRaw !== "user" && kindRaw !== "service") {
     throw new Error("--kind must be 'user' or 'service'");

@@ -47,10 +47,9 @@ export class CredentialVault {
   }
 
   decrypt(blob: EncryptedCredential, deviceId: string): ResolvedCredential {
-    let version;
-    let key;
+    let key: Buffer;
     try {
-      ({ version, key } = this.keys.get(blob.keyVersion));
+      ({ key } = this.keys.get(blob.keyVersion));
     } catch (cause) {
       throw err.credentialDecrypt(deviceId, cause);
     }
@@ -69,9 +68,6 @@ export class CredentialVault {
       return JSON.parse(dec.toString("utf8")) as ResolvedCredential;
     } catch (cause) {
       throw err.credentialDecrypt(deviceId, cause);
-    } finally {
-      // best-effort: scrub local refs
-      void version;
     }
   }
 }

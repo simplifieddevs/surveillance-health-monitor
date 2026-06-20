@@ -76,13 +76,18 @@ export class PollingScheduler {
     void systemContext; // imported to make the type relationship explicit
     const enqueued = await withTenantDb(tenant, async (db) => {
       const devices = await listEnabledDevices(db, tenant, 1000);
+      if (devices.length === 1000) {
+        log.warn({ companyId }, "device list hit 1000-device cap — some devices may not be polled; add pagination");
+      }
       for (const d of devices) {
         await this.pollQueue.add(
           `poll:${d.id}`,
           { deviceId: d.id, companyId },
           {
-            // BullMQ dedupes by jobId; for repeated enqueues we want
-            // one per tick, not a stable id.
+            // Stable jobId per device: if a poll job for this device is
+            // already waiting or active, BullMQ skips the add. Prevents
+            // unbounded queue growth when polls take longer than one tick.
+            jobId: `poll:${d.id}`,
             removeOnComplete: 100,
             removeOnFail: 100,
             attempts: 3,
@@ -111,8 +116,10 @@ export class PollingScheduler {
  */
 export class PollWorker {
   private readonly worker: Worker;
+  private readonly deps: SchedulerDeps;
 
   constructor(deps: SchedulerDeps) {
+    this.deps = deps;
     this.worker = new Worker(
       POLL_QUEUE,
       (job) => this.handle(job),
@@ -145,7 +152,7 @@ export class PollWorker {
 
         // 2. Pull through the adapter. Credentials are decrypted only
         //    inside this closure; they never leave this function.
-        await withResolvedCredential(db, tenant, deviceId, deps().vault, async (cred) => {
+        await withResolvedCredential(db, tenant, deviceId, this.deps.vault, async (cred) => {
           const adapter = adapterFor(device.vendor);
           const pull = await adapter.pull(
             { address: device.address, vendorConfig: device.vendorConfig },
@@ -186,18 +193,6 @@ export class PollWorker {
   async close(): Promise<void> {
     await this.worker.close();
   }
-}
-
-// deps() indirection keeps the constructor signature stable while letting
-// handle() reuse the closure-scope deps.
-function deps(): SchedulerDeps {
-  const g = globalThis as unknown as { __shmDeps?: SchedulerDeps };
-  if (!g.__shmDeps) throw new Error("SchedulerDeps not initialized");
-  return g.__shmDeps;
-}
-
-export function setSchedulerDeps(d: SchedulerDeps): void {
-  (globalThis as unknown as { __shmDeps?: SchedulerDeps }).__shmDeps = d;
 }
 
 async function loadDevice(
