@@ -1,0 +1,276 @@
+openapi: 3.1.0
+info:
+  title: Surveillance Health Monitor API
+  version: 0.1.0
+  description: |
+    Multi-tenant API for managing sites, devices, licenses, and events
+    from a fleet of surveillance devices. Every route (except /healthz,
+    /readyz, /openapi.json) requires a Bearer JWT whose `company_id`
+    claim scopes every read and write.
+
+servers:
+  - url: http://localhost:8080
+    description: Local dev
+
+security:
+  - bearerAuth: []
+
+paths:
+  /healthz:
+    get:
+      summary: Liveness probe
+      security: []
+      responses:
+        "200": { description: ok }
+
+  /readyz:
+    get:
+      summary: Readiness probe (checks DB)
+      security: []
+      responses:
+        "200": { description: ready }
+        "503": { description: not ready }
+
+  /v1/companies/{id}:
+    get:
+      summary: Read this tenant's company row
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: ok }
+        "403": { description: cross-tenant }
+
+  /v1/sites:
+    get:
+      summary: List sites in this tenant
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Site" }
+    post:
+      summary: Create a site
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSite" }
+      responses:
+        "201": { description: created }
+        "422": { description: validation error }
+
+  /v1/sites/{id}:
+    get:
+      summary: Get a site
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: ok }
+        "404": { description: not found }
+
+  /v1/devices:
+    get:
+      summary: List enabled devices
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Device" }
+    post:
+      summary: Add a device (encrypts credentials server-side)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateDevice" }
+      responses:
+        "201": { description: created }
+        "409": { description: tier budget exceeded }
+        "422": { description: validation error }
+
+  /v1/devices/{id}:
+    get:
+      summary: Get a device
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: ok }
+        "404": { description: not found }
+
+  /v1/license:
+    get:
+      summary: Current license + tier metadata
+      responses:
+        "200": { description: ok }
+
+  /v1/events:
+    get:
+      summary: List events in a window
+      parameters:
+        - in: query
+          name: from
+          required: true
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          required: true
+          schema: { type: string, format: date-time }
+        - in: query
+          name: deviceId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: type
+          schema: { $ref: "#/components/schemas/EventType" }
+        - in: query
+          name: severity
+          schema: { $ref: "#/components/schemas/EventSeverity" }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 200 }
+      responses:
+        "200": { description: ok }
+
+  /v1/events/counts:
+    get:
+      summary: Aggregated counts in a window
+      parameters:
+        - in: query
+          name: from
+          required: true
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          required: true
+          schema: { type: string, format: date-time }
+      responses:
+        "200": { description: ok }
+
+  /v1/dashboard:
+    get:
+      summary: Single-payload view for operators and big screens
+      parameters:
+        - in: query
+          name: windowHours
+          schema: { type: integer, default: 24, maximum: 168 }
+      responses:
+        "200": { description: ok }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Site:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        companyId: { type: string, format: uuid }
+        name: { type: string }
+        timezone: { type: string }
+      required: [id, companyId, name, timezone]
+
+    CreateSite:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        timezone: { type: string }
+      required: [name]
+
+    Device:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        companyId: { type: string, format: uuid }
+        siteId: { type: string, format: uuid }
+        name: { type: string }
+        vendor: { $ref: "#/components/schemas/Vendor" }
+        address: { type: string }
+        model: { type: string, nullable: true }
+        firmwareVersion: { type: string, nullable: true }
+        vendorConfig:
+          type: object
+          additionalProperties: true
+        status: { $ref: "#/components/schemas/DeviceStatus" }
+        lastSeenAt: { type: string, format: date-time, nullable: true }
+        pollCursor: { type: string, nullable: true }
+        enabled: { type: boolean }
+      required:
+        - id
+        - companyId
+        - siteId
+        - name
+        - vendor
+        - address
+        - status
+        - enabled
+
+    CreateDevice:
+      type: object
+      properties:
+        siteId: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        vendor: { $ref: "#/components/schemas/Vendor" }
+        address: { type: string }
+        model: { type: string }
+        firmwareVersion: { type: string }
+        vendorConfig:
+          type: object
+          additionalProperties: true
+        credentials:
+          type: object
+          properties:
+            username: { type: string }
+            password: { type: string, format: password }
+            token: { type: string }
+            raw: { type: string }
+      required: [siteId, name, vendor, address, credentials]
+
+    Vendor:
+      type: string
+      enum: [onvif, hikvision, dahua, uniview, hanwha, axis]
+
+    DeviceStatus:
+      type: string
+      enum: [unknown, online, degraded, offline]
+
+    EventType:
+      type: string
+      enum:
+        - device_offline
+        - device_online
+        - auth_failed
+        - recording_lost
+        - recording_resumed
+        - storage_full
+        - storage_warning
+        - channel_lost
+        - channel_restored
+        - firmware_mismatch
+        - config_changed
+        - motion_detected
+        - tamper_detected
+        - video_loss
+        - network_unstable
+        - internal_error
+
+    EventSeverity:
+      type: string
+      enum: [info, warning, error, critical]
