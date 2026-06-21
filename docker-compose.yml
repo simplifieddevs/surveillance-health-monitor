@@ -91,6 +91,8 @@ services:
     environment:
       SHIM_MODE: worker
     # Worker makes outbound calls to cameras; no need for host port binding.
+    healthcheck:
+      disable: true
     mem_limit: 384m
 
 volumes:
