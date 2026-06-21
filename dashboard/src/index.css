@@ -1,0 +1,38 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg:       #0a0c0f;
+  --surface:  #111418;
+  --border:   #1e2329;
+  --text:     #e2e8f0;
+  --muted:    #64748b;
+  --online:   #22c55e;
+  --degraded: #f59e0b;
+  --offline:  #ef4444;
+  --unknown:  #475569;
+  --critical: #dc2626;
+  --info:     #3b82f6;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}

@@ -51,9 +51,21 @@ export async function registerAuth(app: FastifyInstance): Promise<void> {
  * Verify the JWT and produce a TenantContext. Throws UNAUTHORIZED on
  * missing/invalid tokens. The JWT's company_id claim is the ONLY source
  * of truth for tenant identity — never trust a request header or body.
+ *
+ * WebSocket connections cannot set an Authorization header from the browser,
+ * so we also accept a `?token=` query param. The query param is only
+ * extracted here — never reflected back or logged.
  */
 export function requireUser(app: FastifyInstance) {
   return async function authenticate(req: FastifyRequest): Promise<TenantContext> {
+    // For WebSocket upgrade requests, browsers can't send Authorization.
+    // Fall back to ?token= query param if the header is absent.
+    const query = req.query as Record<string, string> | undefined;
+    const queryToken = query?.token;
+    if (queryToken && !req.headers.authorization) {
+      req.headers.authorization = `Bearer ${queryToken}`;
+    }
+
     try {
       await req.jwtVerify();
     } catch {
