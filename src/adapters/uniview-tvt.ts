@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { BaseHTTPAdapter } from "./base-http-adapter.js";
+import { getLogger } from "../core/logger.js";
 import type {
   VendorAdapter,
   AdapterCredential,
@@ -7,6 +8,8 @@ import type {
   PullResult,
   AdapterEvent,
 } from "./types.js";
+
+const log = getLogger().child({ component: "uniview-tvt" });
 
 /**
  * Uniview / TVT LAPI adapter.
@@ -47,19 +50,24 @@ export class UniviewTvtAdapter extends BaseHTTPAdapter implements VendorAdapter 
     try {
       const r = await this.request("GET", base + "/LAPI/V1.0/System/DeviceBasicInfo", a);
       firmwareVersion = extractFirmware(r.body);
-    } catch { /* non-fatal */ }
+      log.debug({ address: target.address, firmwareVersion, status: r.status }, "device info");
+    } catch (e) { log.warn({ address: target.address, err: String(e) }, "device info failed"); }
 
     // ── 2. Disk health ───────────────────────────────────────────────────
     try {
       const r = await this.request("GET", base + "/LAPI/V1.0/Storage/DiskInfo", a);
-      events.push(...parseDiskInfo(r.body));
-    } catch { /* non-fatal — missing endpoint on some firmware */ }
+      const diskEvents = parseDiskInfo(r.body);
+      log.debug({ address: target.address, status: r.status, events: diskEvents.length }, "disk info");
+      events.push(...diskEvents);
+    } catch (e) { log.warn({ address: target.address, err: String(e) }, "disk info failed"); }
 
     // ── 3. Channel status ────────────────────────────────────────────────
     try {
       const r = await this.request("GET", base + "/LAPI/V1.0/ChannelMgmt/ChannelList", a);
-      events.push(...parseChannelList(r.body));
-    } catch { /* non-fatal */ }
+      const channelEvents = parseChannelList(r.body);
+      log.debug({ address: target.address, status: r.status, events: channelEvents.length }, "channel list");
+      events.push(...channelEvents);
+    } catch (e) { log.warn({ address: target.address, err: String(e) }, "channel list failed"); }
 
     // ── 4. Alarm events (cursor-based) ───────────────────────────────────
     let nextCursor = cursor;
@@ -76,9 +84,10 @@ export class UniviewTvtAdapter extends BaseHTTPAdapter implements VendorAdapter 
       });
       const r = await this.request("GET", base + "/LAPI/V1.0/Event/AlarmEvent?" + params, a);
       const { alarmEvents, latestTime } = parseAlarmEvents(r.body);
+      log.debug({ address: target.address, status: r.status, events: alarmEvents.length }, "alarm events");
       events.push(...alarmEvents);
       if (latestTime) nextCursor = new Date(latestTime * 1000).toISOString();
-    } catch { /* non-fatal */ }
+    } catch (e) { log.warn({ address: target.address, err: String(e) }, "alarm events failed"); }
 
     if (!nextCursor) nextCursor = new Date().toISOString();
 
@@ -124,7 +133,10 @@ function isOk(body: unknown): body is { Response: { ResponseCode: number; Data: 
 }
 
 function getData(body: unknown): unknown {
-  if (!isOk(body)) return null;
+  if (!isOk(body)) {
+    log.warn({ body: JSON.stringify(body)?.slice(0, 500) }, "uniview: unexpected response shape");
+    return null;
+  }
   return (body as { Response: { Data: unknown } }).Response.Data;
 }
 

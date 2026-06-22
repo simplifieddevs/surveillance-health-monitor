@@ -119,8 +119,11 @@ async function safeReadBody(res: Response, contentType: string): Promise<unknown
   if (res.status === 204) return null;
   const text = await res.text();
   if (!text) return null;
-  if (contentType.includes("application/json")) {
-    try { return JSON.parse(text); } catch { return text; }
+  // Always attempt JSON parse — many NVR vendors return JSON with text/plain
+  // or no content-type, which would otherwise leave the body as a raw string
+  // and break all downstream parsers.
+  if (contentType.includes("application/json") || !contentType || contentType.includes("text/")) {
+    try { return JSON.parse(text); } catch { /* not JSON, fall through */ }
   }
   return text;
 }
