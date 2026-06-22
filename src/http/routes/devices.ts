@@ -11,7 +11,7 @@ import {
 import { CredentialVault } from "../../crypto/credential-vault.js";
 import { err } from "../../core/errors.js";
 
-const VendorEnum = z.enum(["onvif", "hikvision", "dahua", "uniview", "hanwha", "axis"]);
+const VendorEnum = z.enum(["onvif", "hikvision", "dahua", "uniview", "hanwha", "axis", "tvt"]);
 
 const CreateDeviceBody = z.object({
   siteId: z.string().uuid(),

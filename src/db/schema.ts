@@ -75,6 +75,7 @@ export const vendorEnum = pgEnum("vendor", [
   "uniview",
   "hanwha",
   "axis",
+  "tvt",
 ]);
 
 // bytea helper — Drizzle's built-in is fine but we want explicit naming.

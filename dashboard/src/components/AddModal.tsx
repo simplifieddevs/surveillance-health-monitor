@@ -11,7 +11,7 @@ interface Props {
   onCreated: () => void;
 }
 
-const VENDORS = ['onvif', 'hikvision', 'dahua', 'uniview', 'hanwha', 'axis'] as const;
+const VENDORS = ['onvif', 'hikvision', 'dahua', 'uniview', 'hanwha', 'axis', 'tvt'] as const;
 
 const inputStyle: React.CSSProperties = {
   width: '100%',

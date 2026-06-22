@@ -1,0 +1,1 @@
+ALTER TYPE vendor ADD VALUE IF NOT EXISTS 'tvt';
