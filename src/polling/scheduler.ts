@@ -9,7 +9,7 @@ import {
   type Device,
 } from "../db/repositories/devices.js";
 import { withResolvedCredential } from "../db/repositories/credentials.js";
-import { insertEvents } from "../db/repositories/events.js";
+import { insertEvents, type NormalizedEvent } from "../db/repositories/events.js";
 import { CredentialVault } from "../crypto/credential-vault.js";
 import { normalize } from "./normalize.js";
 import { PollBudget } from "./budget.js";
@@ -139,10 +139,14 @@ export class PollWorker {
       requestId: `poll:${job.id}`,
     };
 
+    // Captured outside the try so the catch block can generate an offline event.
+    let deviceSnapshot: { companyId: string; siteId: string; status: string } | undefined;
+
     try {
       await withTenantDb(tenant, async (db) => {
         // 1. Load device under tenant scope (RLS guarantees isolation).
         const device = await loadDevice(db, tenant, deviceId);
+        deviceSnapshot = { companyId: device.companyId, siteId: device.siteId, status: device.status };
 
         // NOTE: license enforcement is currently disabled per product
         // decision. requireLicense() and the concurrency budget are
@@ -167,12 +171,20 @@ export class PollWorker {
           }
 
           // 4. Update device status + cursor.
+          const newStatus = pull.status ?? "online";
           const { updateStatus } = await import("../db/repositories/devices.js");
           await updateStatus(db, tenant, deviceId, {
-            status: pull.status ?? "online",
+            status: newStatus,
             lastSeenAt: new Date(),
             pollCursor: pull.nextCursor ?? device.pollCursor,
           });
+
+          // 5. Generate status-change events so online/offline transitions
+          //    appear in the event feed.
+          if (device.status !== newStatus && (newStatus === "offline" || device.status === "offline")) {
+            const type = newStatus === "offline" ? "device_offline" : "device_online";
+            await insertEvents(db, [statusChangeEvent(device, type)]);
+          }
         });
       });
     } catch (e) {
@@ -183,6 +195,19 @@ export class PollWorker {
         await withTenantDb(tenant, async (db) => {
           const { updateStatus } = await import("../db/repositories/devices.js");
           await updateStatus(db, tenant, deviceId, { status: "offline" });
+          // Generate offline event only on transition (deviceSnapshot captured before the try).
+          if (deviceSnapshot && deviceSnapshot.status !== "offline") {
+            await insertEvents(db, [{
+              companyId: deviceSnapshot.companyId,
+              siteId: deviceSnapshot.siteId,
+              deviceId,
+              type: "device_offline",
+              severity: "critical",
+              detectedAt: new Date(),
+              rawPayload: {},
+              normalizedFields: { cause: appErr.code },
+            }]);
+          }
         });
         throw err.adapterUnavailable(`device=${deviceId}`);
       }
@@ -202,4 +227,20 @@ async function loadDevice(
 ): Promise<Device> {
   const { getDevice } = await import("../db/repositories/devices.js");
   return getDevice(db, ctx, id);
+}
+
+function statusChangeEvent(
+  device: Device,
+  type: "device_offline" | "device_online",
+): NormalizedEvent {
+  return {
+    companyId: device.companyId,
+    siteId: device.siteId,
+    deviceId: device.id,
+    type,
+    severity: type === "device_offline" ? "critical" : "info",
+    detectedAt: new Date(),
+    rawPayload: {},
+    normalizedFields: { trigger: "status_change" },
+  };
 }

@@ -91,6 +91,14 @@ export class UniviewTvtAdapter extends BaseHTTPAdapter implements VendorAdapter 
 
     if (!nextCursor) nextCursor = new Date().toISOString();
 
+    // ── 5. Time sync ─────────────────────────────────────────────────────
+    try {
+      const r = await this.request("GET", base + "/LAPI/V1.0/System/Time", a);
+      const drift = checkTimeDrift(r.body);
+      log.debug({ address: target.address, status: r.status, hasDrift: !!drift }, "time check");
+      if (drift) events.push(drift);
+    } catch (e) { log.warn({ address: target.address, err: String(e) }, "time check failed"); }
+
     return {
       events,
       nextCursor,
@@ -158,17 +166,19 @@ function parseDiskInfo(body: unknown): AdapterEvent[] {
   for (const disk of list) {
     const d = disk as Record<string, unknown>;
     const status = d.Status as number | undefined;
-    const capacity = (d.Capacity as number | undefined) ?? 0;
-    const used = (d.Used as number | undefined) ?? 0;
-    const usedPct = capacity > 0 ? Math.round((used / capacity) * 100) : 0;
 
     // Status: 0=Normal, 1=Uninitialized, 2=Error, 3=Full
+    // Only report hardware failures — capacity warnings (status=3, usedPct) not surfaced.
     if (status === 2) {
-      events.push(makeEvent("storage_full", "error", { diskNo: d.DiskNo, status, usedPct }));
-    } else if (status === 3 || usedPct >= 95) {
-      events.push(makeEvent("storage_full", "critical", { diskNo: d.DiskNo, usedPct }));
-    } else if (usedPct >= 80) {
-      events.push(makeEvent("storage_warning", "warning", { diskNo: d.DiskNo, usedPct }));
+      events.push(makeEvent("recording_lost", "critical", {
+        diskNo: d.DiskNo,
+        kind: "disk_failure",
+      }));
+    } else if (status === 1) {
+      events.push(makeEvent("internal_error", "warning", {
+        diskNo: d.DiskNo,
+        kind: "disk_uninitialized",
+      }));
     }
   }
   return events;
@@ -187,15 +197,18 @@ function parseChannelList(body: unknown): AdapterEvent[] {
   const events: AdapterEvent[] = [];
   for (const ch of list) {
     const c = ch as Record<string, unknown>;
-    // ConnectStatus/Status: 0=offline 1=online; some use "online"/"offline" string
-    const status = c.ConnectStatus ?? c.Status ?? c.ChannelStatus;
+    // Field name varies across Uniview/TVT firmware versions
+    const status = c.ConnectStatus ?? c.ChannelStatus ?? c.IPCStatus ?? c.CameraStatus ?? c.Status;
     const offline =
-      status === 0 || status === "offline" || status === "Offline" || status === "disconnected";
+      status === 0 ||
+      status === "offline" || status === "Offline" ||
+      status === "disconnected" || status === "Disconnected" ||
+      status === "NoVideo";
     if (offline) {
       events.push(
         makeEvent("channel_lost", "error", {
-          channelId: c.ChannelID ?? c.ID,
-          channelName: c.ChannelName ?? c.Name,
+          channelId: c.ChannelID ?? c.ChanNo ?? c.ID,
+          channelName: c.ChannelName ?? c.ChanName ?? c.Name,
         }),
       );
     }
@@ -257,6 +270,40 @@ function parseAlarmEvents(body: unknown): { alarmEvents: AdapterEvent[]; latestT
   }
 
   return { alarmEvents: events, latestTime };
+}
+
+// ── Time sync ─────────────────────────────────────────────────────────────
+
+const TIME_DRIFT_THRESHOLD_S = 300; // 5 minutes
+
+function checkTimeDrift(body: unknown): AdapterEvent | null {
+  const data = getData(body) as Record<string, unknown> | null;
+  if (!data) return null;
+
+  let deviceUtcMs: number | null = null;
+
+  if (typeof data.UTCTime === "string") {
+    // UTCTime is directly comparable to Date.now()
+    const str = data.UTCTime.includes("Z") ? data.UTCTime : data.UTCTime.replace(" ", "T") + "Z";
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) deviceUtcMs = d.getTime();
+  } else if (typeof data.LocalTime === "string") {
+    // Convert local time to UTC using device-reported offset (seconds from UTC).
+    // Default to UTC-5 (-18000s) if the device doesn't report its timezone.
+    const offsetSeconds = typeof data.TimeZone === "number" ? data.TimeZone : -5 * 3600;
+    const localMs = new Date(data.LocalTime.replace(" ", "T")).getTime();
+    if (!isNaN(localMs)) deviceUtcMs = localMs - offsetSeconds * 1000;
+  }
+
+  if (deviceUtcMs === null) return null;
+
+  const driftSeconds = Math.abs((Date.now() - deviceUtcMs) / 1000);
+  if (driftSeconds < TIME_DRIFT_THRESHOLD_S) return null;
+
+  return makeEvent("internal_error", "warning", {
+    kind: "time_drift",
+    driftSeconds: Math.round(driftSeconds),
+  });
 }
 
 function severityFor(type: AdapterEvent["type"]): AdapterEvent["severity"] {
