@@ -22,6 +22,8 @@ import {
 } from "./polling/scheduler.js";
 import { EventIndexer } from "./workers/event-indexer.js";
 import { scheduleLicenseExpiry, startLicenseExpiryWorker } from "./workers/license-expiry.js";
+import { withSystemDb } from "./db/client.js";
+import { listAllCompanies } from "./db/repositories/companies.js";
 
 const log = getLogger().child({ component: "main" });
 
@@ -51,7 +53,15 @@ async function main(): Promise<void> {
     await indexer.start();
     await scheduleLicenseExpiry(redis);
     startLicenseExpiryWorker(redis);
-    log.info({ mode }, "worker ready");
+
+    // Schedule a polling tick for every existing company so devices start
+    // being polled immediately on boot, not waiting for an external trigger.
+    const allCompanies = await withSystemDb(listAllCompanies);
+    for (const company of allCompanies) {
+      await scheduler.scheduleCompanyTick(company.id);
+      log.info({ companyId: company.id, name: company.name }, "polling tick scheduled");
+    }
+    log.info({ mode, companies: allCompanies.length }, "worker ready");
     // Keep alive until SIGINT/SIGTERM.
     const stop = async () => {
       await worker.close();
