@@ -170,6 +170,8 @@ function UnitForm({ sites, onBack, onCreated }: { sites: Site[]; onBack: () => v
   const [name, setName] = useState('');
   const [vendor, setVendor] = useState<string>(VENDORS[0]);
   const [address, setAddress] = useState('');
+  const [httpPort, setHttpPort] = useState('80');
+  const [serverPort, setServerPort] = useState('554');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
@@ -198,6 +200,10 @@ function UnitForm({ sites, onBack, onCreated }: { sites: Site[]; onBack: () => v
         credentials: {
           username: username.trim() || undefined,
           password: password || undefined,
+        },
+        vendorConfig: {
+          httpPort: httpPort ? parseInt(httpPort, 10) : undefined,
+          serverPort: serverPort ? parseInt(serverPort, 10) : undefined,
         },
       });
       onCreated();
@@ -243,6 +249,29 @@ function UnitForm({ sites, onBack, onCreated }: { sites: Site[]; onBack: () => v
           <span>IP address / hostname *</span>
           <input style={inputStyle} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="192.168.1.100" />
         </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <Field label="HTTP port">
+          <input
+            style={inputStyle}
+            type="number"
+            min={1} max={65535}
+            value={httpPort}
+            onChange={(e) => setHttpPort(e.target.value)}
+            placeholder="80"
+          />
+        </Field>
+        <Field label="Server port (RTSP/ONVIF)">
+          <input
+            style={inputStyle}
+            type="number"
+            min={1} max={65535}
+            value={serverPort}
+            onChange={(e) => setServerPort(e.target.value)}
+            placeholder="554"
+          />
+        </Field>
       </div>
 
       <div style={{ display: 'flex', gap: '0.75rem' }}>

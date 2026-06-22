@@ -69,6 +69,7 @@ export const api = {
     vendor: string;
     address: string;
     credentials: { username?: string; password?: string };
+    vendorConfig?: { httpPort?: number; serverPort?: number };
   }) => post<Device>('/v1/devices', body),
 };
 
