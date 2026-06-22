@@ -10,6 +10,7 @@ export interface Device {
   lastSeenAt: string | null;
   siteId: string;
   enabled: boolean;
+  vendorConfig: Record<string, unknown>;
 }
 
 export interface Site {
