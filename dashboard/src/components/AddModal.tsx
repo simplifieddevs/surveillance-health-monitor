@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from '../api';
+import { TestConnectivityBtn } from './TestConnectivityBtn';
 import type { Site } from '../types';
 
 type Flow = 'choose' | 'site' | 'unit';
@@ -285,6 +286,15 @@ function UnitForm({ sites, preselectedSite, onBack, onCreated }: { sites: Site[]
           <input style={inputStyle} type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoComplete="new-password" />
         </Field>
       </div>
+
+      <TestConnectivityBtn
+        mode="presave"
+        vendor={vendor}
+        address={address}
+        httpPort={httpPort}
+        username={username}
+        password={password}
+      />
 
       {error && <div style={{ color: 'var(--offline)', fontSize: '12px' }}>{error}</div>}
       <FormFooter onBack={onBack} saving={saving} label="Add unit" />

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from '../api';
+import { TestConnectivityBtn } from './TestConnectivityBtn';
 import type { Device, Site } from '../types';
 
 interface Props {
@@ -178,6 +179,15 @@ function SiteEditForm({ site, onSaved, onCancel }: { site: Site; onSaved: () => 
 
 /* ── Device row ──────────────────────────────────────────── */
 
+function deviceWebUrl(device: Device): string {
+  const cfg = device.vendorConfig as Record<string, unknown>;
+  const port = (cfg?.httpPort as number | undefined) ?? 80;
+  const addr = device.address.replace(/\/+$/, '');
+  if (/^https?:\/\//i.test(addr)) return addr;
+  const scheme = port === 443 ? 'https' : 'http';
+  return `${scheme}://${addr}:${port}`;
+}
+
 function DeviceRow({ device, onEdit }: { device: Device; onEdit: () => void }) {
   const color = STATUS_COLOR[device.status];
   const symbol = STATUS_SYMBOL[device.status];
@@ -201,6 +211,15 @@ function DeviceRow({ device, onEdit }: { device: Device; onEdit: () => void }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
         <span style={{ color, fontSize: '11px' }}>{symbol}</span>
         <span style={{ fontWeight: 600, fontSize: '13px', flex: 1 }}>{device.name}</span>
+        <a
+          href={deviceWebUrl(device)}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Open device web UI"
+          style={{ fontSize: '11px', color: 'var(--info)', textDecoration: 'none', padding: '0 0.25rem' }}
+        >
+          ↗ Open
+        </a>
         <button
           onClick={onEdit}
           style={{ fontSize: '11px', color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 0.25rem' }}
@@ -291,6 +310,15 @@ function DeviceEditForm({ device, onSaved, onCancel }: { device: Device; onSaved
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
         Enabled (polls this device)
       </label>
+
+      <TestConnectivityBtn
+        mode="presave"
+        vendor={device.vendor}
+        address={address}
+        httpPort={httpPort}
+        username={username}
+        password={password}
+      />
 
       {error && <div style={{ color: 'var(--offline)', fontSize: '11px' }}>{error}</div>}
       <div style={{ display: 'flex', gap: '0.5rem' }}>

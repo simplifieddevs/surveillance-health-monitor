@@ -94,6 +94,46 @@ export const deviceRoutes: FastifyPluginAsync<{ deps: DeviceRoutesDeps }> = asyn
     return withTenantDb(ctx, (db) => getDevice(db, ctx, id));
   });
 
+  // Test connectivity without saving — used by the dashboard add/edit flow.
+  app.post("/v1/devices/connectivity-test", async (req) => {
+    const ctx = req.tenant;
+    if (!ctx) throw err.tenantRequired(req.id);
+    const body = z.object({
+      vendor: VendorEnum,
+      address: z.string().min(1).max(512),
+      vendorConfig: z.record(z.unknown()).optional(),
+      credentials: z.object({
+        username: z.string().optional(),
+        password: z.string().optional(),
+      }).optional(),
+    }).parse(req.body);
+
+    const adapter = (await import("../../adapters/registry.js")).adapterFor(body.vendor as import("../../db/repositories/devices.js").Vendor);
+    const result = await adapter.testConnectivity(
+      { address: body.address, vendorConfig: body.vendorConfig ?? {} },
+      { username: body.credentials?.username, password: body.credentials?.password },
+    );
+    return result;
+  });
+
+  // Test connectivity for an already-saved device using stored credentials.
+  app.post("/v1/devices/:id/test", async (req) => {
+    const ctx = req.tenant;
+    if (!ctx) throw err.tenantRequired(req.id);
+    const { id } = IdParams.parse(req.params);
+    const { withResolvedCredential } = await import("../../db/repositories/credentials.js");
+    return withTenantDb(ctx, async (db) => {
+      const device = await getDevice(db, ctx, id);
+      return withResolvedCredential(db, ctx, id, vault, async (cred) => {
+        const adapter = (await import("../../adapters/registry.js")).adapterFor(device.vendor);
+        return adapter.testConnectivity(
+          { address: device.address, vendorConfig: device.vendorConfig },
+          cred,
+        );
+      });
+    });
+  });
+
   app.patch("/v1/devices/:id", async (req) => {
     const ctx = req.tenant;
     if (!ctx) throw err.tenantRequired(req.id);

@@ -75,6 +75,20 @@ export const api = {
   updateSite: (id: string, body: { name?: string; timezone?: string }) =>
     request<Site>('PATCH', `/v1/sites/${id}`, body),
 
+  testConnectivity: (body: {
+    vendor: string;
+    address: string;
+    vendorConfig?: Record<string, unknown>;
+    credentials?: { username?: string; password?: string };
+  }) => request<{ ok: boolean; latencyMs: number; reason?: string }>(
+    'POST', '/v1/devices/connectivity-test', body
+  ),
+
+  testSavedDevice: (id: string) =>
+    request<{ ok: boolean; latencyMs: number; reason?: string }>(
+      'POST', `/v1/devices/${id}/test`, {}
+    ),
+
   updateDevice: (
     id: string,
     body: {
