@@ -10,7 +10,13 @@ const EnvSchema = z.object({
   HTTP_PORT: z.coerce.number().int().positive().default(8080),
   LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal"]).default("info"),
 
-  JWT_SECRET: z.string().min(32, "JWT_SECRET must be >=32 chars"),
+  // Set DISABLE_AUTH=true to bypass JWT verification (dev/demo only).
+  DISABLE_AUTH: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
+
+  JWT_SECRET: z.string().min(32, "JWT_SECRET must be >=32 chars").optional(),
   JWT_ISSUER: z.string().default("shm"),
   JWT_AUDIENCE: z.string().default("shm-api"),
 
@@ -44,7 +50,14 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
       .join("\n");
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
-  cached = Object.freeze(parsed.data);
+  const data = parsed.data;
+  // JWT_SECRET is required unless DISABLE_AUTH is set.
+  if (!data.DISABLE_AUTH && (!data.JWT_SECRET || data.JWT_SECRET.length < 32)) {
+    throw new Error(
+      "Invalid environment configuration:\n  - JWT_SECRET: must be >=32 chars (or set DISABLE_AUTH=true)",
+    );
+  }
+  cached = Object.freeze(data);
   return cached;
 }
 

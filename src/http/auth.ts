@@ -38,10 +38,18 @@ declare module "@fastify/jwt" {
   }
 }
 
+// Fixed dev company ID used when DISABLE_AUTH=true. Any UUID is fine —
+// just needs to be stable so DB RLS scoping is consistent across requests.
+const DEV_COMPANY_ID = "00000000-0000-0000-0000-000000000001";
+
 export async function registerAuth(app: FastifyInstance): Promise<void> {
   const env = loadEnv();
+  if (env.DISABLE_AUTH) {
+    app.log.warn("DISABLE_AUTH=true — JWT verification is disabled. Never use this in production.");
+    return;
+  }
   await app.register(fastifyJwt, {
-    secret: env.JWT_SECRET,
+    secret: env.JWT_SECRET!,
     sign: { iss: env.JWT_ISSUER, aud: env.JWT_AUDIENCE },
     verify: { allowedIss: env.JWT_ISSUER, allowedAud: env.JWT_AUDIENCE },
   });
@@ -57,6 +65,19 @@ export async function registerAuth(app: FastifyInstance): Promise<void> {
  * extracted here — never reflected back or logged.
  */
 export function requireUser(app: FastifyInstance) {
+  const env = loadEnv();
+
+  if (env.DISABLE_AUTH) {
+    return async function devAuth(req: FastifyRequest): Promise<TenantContext> {
+      return {
+        companyId: DEV_COMPANY_ID,
+        subjectId: "dev",
+        subjectKind: "user",
+        requestId: req.id,
+      };
+    };
+  }
+
   return async function authenticate(req: FastifyRequest): Promise<TenantContext> {
     // For WebSocket upgrade requests, browsers can't send Authorization.
     // Fall back to ?token= query param if the header is absent.

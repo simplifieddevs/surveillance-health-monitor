@@ -1,10 +1,9 @@
-import { useCallback, useState } from 'react';
-import { getToken } from './api';
+import { useCallback, useEffect, useState } from 'react';
+import { getToken, saveToken } from './api';
 import { AlertBanner } from './components/AlertBanner';
 import { EventFeed } from './components/EventFeed';
 import { Header } from './components/Header';
 import { SiteGrid } from './components/SiteGrid';
-import { TokenSetup } from './components/TokenSetup';
 import { useDashboard } from './hooks/useDashboard';
 import { useEventStream } from './hooks/useEventStream';
 import type { LiveEvent } from './types';
@@ -12,22 +11,15 @@ import type { LiveEvent } from './types';
 const MAX_EVENTS = 200;
 
 export function App() {
-  const [hasToken, setHasToken] = useState(() => {
-    // Also accept ?token= in URL for initial setup
+  // Accept ?token= in URL for initial setup, then drop it from the address bar.
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const urlToken = params.get('token');
     if (urlToken) {
-      import('./api').then(({ saveToken }) => saveToken(urlToken));
-      // Remove from URL bar without page reload
+      saveToken(urlToken);
       window.history.replaceState({}, '', window.location.pathname);
-      return true;
     }
-    return Boolean(getToken());
-  });
-
-  if (!hasToken) {
-    return <TokenSetup onSaved={() => setHasToken(true)} />;
-  }
+  }, []);
 
   return <Dashboard />;
 }

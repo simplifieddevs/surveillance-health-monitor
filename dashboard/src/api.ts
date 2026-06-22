@@ -20,9 +20,8 @@ async function get<T>(path: string): Promise<T> {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (res.status === 401) {
-    clearToken();
-    window.location.reload();
-    throw new Error('Unauthorized');
+    // Don't auto-reload — let the UI show an auth error instead.
+    throw new Error('401 Unauthorized — set DISABLE_AUTH=true on the server or provide a token via ?token=');
   }
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json() as Promise<T>;
