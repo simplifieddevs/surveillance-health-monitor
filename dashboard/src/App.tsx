@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getToken, saveToken } from './api';
+import { AddModal } from './components/AddModal';
 import { AlertBanner } from './components/AlertBanner';
 import { EventFeed } from './components/EventFeed';
 import { Header } from './components/Header';
@@ -25,9 +26,10 @@ export function App() {
 }
 
 function Dashboard() {
-  const { fleet, sites, deviceMap, loading, error, lastUpdated, patchDeviceStatus } =
+  const { fleet, sites, deviceMap, loading, error, lastUpdated, patchDeviceStatus, reload } =
     useDashboard();
 
+  const [showAdd, setShowAdd] = useState(false);
   const [events, setEvents] = useState<LiveEvent[]>([]);
 
   const handleEvent = useCallback(
@@ -84,12 +86,19 @@ function Dashboard() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Header fleet={fleet} lastUpdated={lastUpdated} />
+      <Header fleet={fleet} lastUpdated={lastUpdated} onAdd={() => setShowAdd(true)} />
       <AlertBanner events={events} deviceName={deviceName} />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <SiteGrid sites={sites} />
         <EventFeed events={events} deviceName={deviceName} siteName={siteName} />
       </div>
+      {showAdd && (
+        <AddModal
+          sites={sites.map((s) => s.site)}
+          onClose={() => setShowAdd(false)}
+          onCreated={() => { setShowAdd(false); reload(); }}
+        />
+      )}
     </div>
   );
 }

@@ -4,9 +4,10 @@ import type { FleetSummary } from '../types';
 interface Props {
   fleet: FleetSummary | null;
   lastUpdated: Date | null;
+  onAdd: () => void;
 }
 
-export function Header({ fleet, lastUpdated }: Props) {
+export function Header({ fleet, lastUpdated, onAdd }: Props) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -56,6 +57,27 @@ export function Header({ fleet, lastUpdated }: Props) {
           updated {lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
         </span>
       )}
+
+      <button
+        onClick={onAdd}
+        title="Add site or unit"
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: '28px', height: '28px',
+          borderRadius: '6px',
+          border: '1px solid var(--border)',
+          background: 'none',
+          color: 'var(--text)',
+          fontSize: '18px',
+          cursor: 'pointer',
+          lineHeight: 1,
+          flexShrink: 0,
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--online)'; e.currentTarget.style.color = 'var(--online)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text)'; }}
+      >
+        +
+      </button>
 
       <span className="mono" style={{ fontSize: '13px', color: 'var(--text)', minWidth: '160px', textAlign: 'right' }}>
         {dateStr}&nbsp;&nbsp;{timeStr}

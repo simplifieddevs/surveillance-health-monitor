@@ -107,7 +107,7 @@ export function useDashboard(pollMs = 30_000) {
     };
   }, [load, pollMs]);
 
-  return { ...state, patchDeviceStatus };
+  return { ...state, patchDeviceStatus, reload: load };
 }
 
 function recalcFleet(

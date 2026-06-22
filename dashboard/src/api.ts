@@ -14,16 +14,35 @@ export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-async function get<T>(path: string): Promise<T> {
+function authHeaders(): Record<string, string> {
   const token = getToken();
-  const res = await fetch(path, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function get<T>(path: string): Promise<T> {
+  const res = await fetch(path, { headers: authHeaders() });
   if (res.status === 401) {
-    // Don't auto-reload — let the UI show an auth error instead.
     throw new Error('401 Unauthorized — set DISABLE_AUTH=true on the server or provide a token via ?token=');
   }
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json() as Promise<T>;
+}
+
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 401) {
+    throw new Error('401 Unauthorized');
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    let msg = `${res.status} ${res.statusText}`;
+    try { msg = JSON.parse(text).message ?? msg; } catch { /* ignore */ }
+    throw new Error(msg);
+  }
   return res.json() as Promise<T>;
 }
 
@@ -40,6 +59,17 @@ export const api = {
     const from = new Date(Date.now() - limitMinutes * 60_000).toISOString();
     return get<LiveEvent[]>(`/v1/events?from=${from}&to=${to}&limit=100`);
   },
+
+  createSite: (body: { name: string; timezone?: string }) =>
+    post<Site>('/v1/sites', body),
+
+  createDevice: (body: {
+    siteId: string;
+    name: string;
+    vendor: string;
+    address: string;
+    credentials: { username?: string; password?: string };
+  }) => post<Device>('/v1/devices', body),
 };
 
 export function buildWsUrl(): string {
