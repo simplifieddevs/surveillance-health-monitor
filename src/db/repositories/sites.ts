@@ -37,6 +37,30 @@ export async function getSite(db: Db, ctx: TenantContext, id: string): Promise<S
   return { id: row.id, companyId: row.companyId, name: row.name, timezone: row.timezone };
 }
 
+export interface UpdateSiteInput {
+  name?: string;
+  timezone?: string;
+}
+
+export async function updateSite(
+  db: Db,
+  ctx: TenantContext,
+  id: string,
+  input: UpdateSiteInput,
+): Promise<Site> {
+  const rows = await db
+    .update(sites)
+    .set({
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
+    })
+    .where(and(eq(sites.companyId, ctx.companyId), eq(sites.id, id)))
+    .returning();
+  const row = rows[0];
+  if (!row) throw err.notFound("Site", id);
+  return { id: row.id, companyId: row.companyId, name: row.name, timezone: row.timezone };
+}
+
 export interface CreateSiteInput {
   name: string;
   timezone?: string;

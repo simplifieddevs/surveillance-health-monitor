@@ -1,11 +1,12 @@
-import type { SiteWithDevices } from '../types';
+import type { Site, SiteWithDevices } from '../types';
 import { SiteCard } from './SiteCard';
 
 interface Props {
   sites: SiteWithDevices[];
+  onSelectSite: (site: Site) => void;
 }
 
-export function SiteGrid({ sites }: Props) {
+export function SiteGrid({ sites, onSelectSite }: Props) {
   if (sites.length === 0) {
     return (
       <div style={{
@@ -32,7 +33,7 @@ export function SiteGrid({ sites }: Props) {
       alignContent: 'start',
     }}>
       {sites.map((s) => (
-        <SiteCard key={s.site.id} data={s} />
+        <SiteCard key={s.site.id} data={s} onClick={() => onSelectSite(s.site)} />
       ))}
     </div>
   );

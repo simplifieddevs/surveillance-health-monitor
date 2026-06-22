@@ -28,9 +28,9 @@ async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
+async function request<T>(method: string, path: string, body: unknown): Promise<T> {
   const res = await fetch(path, {
-    method: 'POST',
+    method,
     headers: { ...authHeaders(), 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
@@ -61,7 +61,7 @@ export const api = {
   },
 
   createSite: (body: { name: string; timezone?: string }) =>
-    post<Site>('/v1/sites', body),
+    request<Site>('POST', '/v1/sites', body),
 
   createDevice: (body: {
     siteId: string;
@@ -70,7 +70,21 @@ export const api = {
     address: string;
     credentials: { username?: string; password?: string };
     vendorConfig?: { httpPort?: number; serverPort?: number };
-  }) => post<Device>('/v1/devices', body),
+  }) => request<Device>('POST', '/v1/devices', body),
+
+  updateSite: (id: string, body: { name?: string; timezone?: string }) =>
+    request<Site>('PATCH', `/v1/sites/${id}`, body),
+
+  updateDevice: (
+    id: string,
+    body: {
+      name?: string;
+      address?: string;
+      vendorConfig?: Record<string, unknown>;
+      enabled?: boolean;
+      credentials?: { username?: string; password?: string };
+    },
+  ) => request<Device>('PATCH', `/v1/devices/${id}`, body),
 };
 
 export function buildWsUrl(): string {

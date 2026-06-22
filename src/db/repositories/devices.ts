@@ -85,6 +85,43 @@ function toDevice(row: typeof devices.$inferSelect): Device {
   };
 }
 
+export interface UpdateDeviceInput {
+  name?: string;
+  address?: string;
+  vendorConfig?: Record<string, unknown>;
+  credentials?: EncryptedCredential;
+  enabled?: boolean;
+}
+
+export async function updateDevice(
+  db: Db,
+  ctx: TenantContext,
+  id: string,
+  input: UpdateDeviceInput,
+): Promise<Device> {
+  const rows = await db
+    .update(devices)
+    .set({
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.address !== undefined ? { address: input.address } : {}),
+      ...(input.vendorConfig !== undefined ? { vendorConfig: input.vendorConfig } : {}),
+      ...(input.credentials !== undefined
+        ? {
+            credentialCipher: input.credentials.ciphertext,
+            credentialIv: input.credentials.iv,
+            credentialKeyVersion: input.credentials.keyVersion,
+          }
+        : {}),
+      ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(devices.companyId, ctx.companyId), eq(devices.id, id)))
+    .returning();
+  const row = rows[0];
+  if (!row) throw err.notFound("Device", id);
+  return toDevice(row);
+}
+
 export interface CreateDeviceInput {
   siteId: string;
   name: string;

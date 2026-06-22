@@ -2,6 +2,7 @@ import type { Device, SiteWithDevices } from '../types';
 
 interface Props {
   data: SiteWithDevices;
+  onClick: () => void;
 }
 
 const STATUS_COLOR: Record<Device['status'], string> = {
@@ -18,7 +19,7 @@ const STATUS_SYMBOL: Record<Device['status'], string> = {
   unknown: '○',
 };
 
-export function SiteCard({ data }: Props) {
+export function SiteCard({ data, onClick }: Props) {
   const { site, devices } = data;
   const enabled = devices.filter((d) => d.enabled);
   const online = enabled.filter((d) => d.status === 'online').length;
@@ -33,16 +34,23 @@ export function SiteCard({ data }: Props) {
     : 'var(--border)';
 
   return (
-    <div style={{
-      background: 'var(--surface)',
-      border: `1px solid ${borderColor}`,
-      borderRadius: '8px',
-      padding: '0.875rem 1rem',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '0.625rem',
-      minHeight: '120px',
-    }}>
+    <div
+      onClick={onClick}
+      style={{
+        background: 'var(--surface)',
+        border: `1px solid ${borderColor}`,
+        borderRadius: '8px',
+        padding: '0.875rem 1rem',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.625rem',
+        minHeight: '120px',
+        cursor: 'pointer',
+        transition: 'border-color 0.15s, background 0.15s',
+      }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = '#1a1f27'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'var(--surface)'; }}
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text)', lineHeight: 1.3 }}>
           {site.name}

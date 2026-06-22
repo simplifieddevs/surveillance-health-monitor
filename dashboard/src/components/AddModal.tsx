@@ -6,6 +6,7 @@ type Flow = 'choose' | 'site' | 'unit';
 
 interface Props {
   sites: Site[];
+  preselectedSite?: Site | null;
   onClose: () => void;
   onCreated: () => void;
 }
@@ -41,8 +42,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function AddModal({ sites, onClose, onCreated }: Props) {
-  const [flow, setFlow] = useState<Flow>('choose');
+export function AddModal({ sites, preselectedSite, onClose, onCreated }: Props) {
+  const [flow, setFlow] = useState<Flow>(preselectedSite ? 'unit' : 'choose');
 
   return (
     <div
@@ -74,7 +75,7 @@ export function AddModal({ sites, onClose, onCreated }: Props) {
 
         {flow === 'choose' && <ChooseFlow onChoose={setFlow} />}
         {flow === 'site' && <SiteForm onBack={() => setFlow('choose')} onCreated={onCreated} />}
-        {flow === 'unit' && <UnitForm sites={sites} onBack={() => setFlow('choose')} onCreated={onCreated} />}
+        {flow === 'unit' && <UnitForm sites={sites} preselectedSite={preselectedSite} onBack={() => setFlow('choose')} onCreated={onCreated} />}
       </div>
     </div>
   );
@@ -163,9 +164,11 @@ function SiteForm({ onBack, onCreated }: { onBack: () => void; onCreated: () => 
   );
 }
 
-function UnitForm({ sites, onBack, onCreated }: { sites: Site[]; onBack: () => void; onCreated: () => void }) {
-  const [siteMode, setSiteMode] = useState<'existing' | 'new'>(sites.length > 0 ? 'existing' : 'new');
-  const [siteId, setSiteId] = useState(sites[0]?.id ?? '');
+function UnitForm({ sites, preselectedSite, onBack, onCreated }: { sites: Site[]; preselectedSite?: Site | null; onBack: () => void; onCreated: () => void }) {
+  const [siteMode, setSiteMode] = useState<'existing' | 'new'>(
+    preselectedSite || sites.length > 0 ? 'existing' : 'new'
+  );
+  const [siteId, setSiteId] = useState(preselectedSite?.id ?? sites[0]?.id ?? '');
   const [newSiteName, setNewSiteName] = useState('');
   const [name, setName] = useState('');
   const [vendor, setVendor] = useState<string>(VENDORS[0]);

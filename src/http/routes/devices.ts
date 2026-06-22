@@ -5,6 +5,7 @@ import {
   createDevice,
   getDevice,
   listEnabledDevices,
+  updateDevice,
   type Vendor,
 } from "../../db/repositories/devices.js";
 import { CredentialVault } from "../../crypto/credential-vault.js";
@@ -29,6 +30,19 @@ const CreateDeviceBody = z.object({
     (v) => v.username !== undefined || v.password !== undefined || v.token !== undefined || v.raw !== undefined,
     { message: "credentials must include at least one field" },
   ),
+});
+
+const UpdateDeviceBody = z.object({
+  name: z.string().min(1).max(200).optional(),
+  address: z.string().min(1).max(512).optional(),
+  vendorConfig: z.record(z.unknown()).optional(),
+  enabled: z.boolean().optional(),
+  credentials: z.object({
+    username: z.string().max(200).optional(),
+    password: z.string().max(512).optional(),
+    token: z.string().max(2000).optional(),
+    raw: z.string().max(4096).optional(),
+  }).optional(),
 });
 
 const IdParams = z.object({ id: z.string().uuid() });
@@ -78,5 +92,22 @@ export const deviceRoutes: FastifyPluginAsync<{ deps: DeviceRoutesDeps }> = asyn
     if (!ctx) throw err.tenantRequired(req.id);
     const { id } = IdParams.parse(req.params);
     return withTenantDb(ctx, (db) => getDevice(db, ctx, id));
+  });
+
+  app.patch("/v1/devices/:id", async (req) => {
+    const ctx = req.tenant;
+    if (!ctx) throw err.tenantRequired(req.id);
+    const { id } = IdParams.parse(req.params);
+    const body = UpdateDeviceBody.parse(req.body);
+    return withTenantDb(ctx, async (db) => {
+      const credBlob = body.credentials ? vault.encrypt(body.credentials) : undefined;
+      return updateDevice(db, ctx, id, {
+        name: body.name,
+        address: body.address,
+        vendorConfig: body.vendorConfig,
+        enabled: body.enabled,
+        credentials: credBlob,
+      });
+    });
   });
 };

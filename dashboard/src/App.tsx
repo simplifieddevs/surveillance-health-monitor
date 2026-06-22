@@ -4,10 +4,11 @@ import { AddModal } from './components/AddModal';
 import { AlertBanner } from './components/AlertBanner';
 import { EventFeed } from './components/EventFeed';
 import { Header } from './components/Header';
+import { SiteDetailPanel } from './components/SiteDetailPanel';
 import { SiteGrid } from './components/SiteGrid';
 import { useDashboard } from './hooks/useDashboard';
 import { useEventStream } from './hooks/useEventStream';
-import type { LiveEvent } from './types';
+import type { LiveEvent, Site } from './types';
 
 const MAX_EVENTS = 200;
 
@@ -30,6 +31,8 @@ function Dashboard() {
     useDashboard();
 
   const [showAdd, setShowAdd] = useState(false);
+  const [addForSite, setAddForSite] = useState<Site | null>(null);
+  const [selectedSite, setSelectedSite] = useState<Site | null>(null);
   const [events, setEvents] = useState<LiveEvent[]>([]);
 
   const handleEvent = useCallback(
@@ -89,14 +92,29 @@ function Dashboard() {
       <Header fleet={fleet} lastUpdated={lastUpdated} onAdd={() => setShowAdd(true)} />
       <AlertBanner events={events} deviceName={deviceName} />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <SiteGrid sites={sites} />
+        <SiteGrid sites={sites} onSelectSite={setSelectedSite} />
         <EventFeed events={events} deviceName={deviceName} siteName={siteName} />
       </div>
+
+      {selectedSite && (() => {
+        const sw = sites.find((s) => s.site.id === selectedSite.id);
+        return (
+          <SiteDetailPanel
+            site={selectedSite}
+            devices={sw?.devices ?? []}
+            onClose={() => setSelectedSite(null)}
+            onUpdated={() => { reload(); }}
+            onAddDevice={(site) => { setSelectedSite(null); setAddForSite(site); setShowAdd(true); }}
+          />
+        );
+      })()}
+
       {showAdd && (
         <AddModal
           sites={sites.map((s) => s.site)}
-          onClose={() => setShowAdd(false)}
-          onCreated={() => { setShowAdd(false); reload(); }}
+          preselectedSite={addForSite}
+          onClose={() => { setShowAdd(false); setAddForSite(null); }}
+          onCreated={() => { setShowAdd(false); setAddForSite(null); reload(); }}
         />
       )}
     </div>
