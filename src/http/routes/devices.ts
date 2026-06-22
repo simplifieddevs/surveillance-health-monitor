@@ -3,6 +3,7 @@ import { z } from "zod";
 import { withTenantDb } from "../../db/client.js";
 import {
   createDevice,
+  deleteDevice,
   getDevice,
   listEnabledDevices,
   updateDevice,
@@ -132,6 +133,14 @@ export const deviceRoutes: FastifyPluginAsync<{ deps: DeviceRoutesDeps }> = asyn
         );
       });
     });
+  });
+
+  app.delete("/v1/devices/:id", async (req, reply) => {
+    const ctx = req.tenant;
+    if (!ctx) throw err.tenantRequired(req.id);
+    const { id } = IdParams.parse(req.params);
+    await withTenantDb(ctx, (db) => deleteDevice(db, ctx, id));
+    reply.code(204);
   });
 
   app.patch("/v1/devices/:id", async (req) => {

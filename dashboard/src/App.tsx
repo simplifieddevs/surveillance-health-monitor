@@ -104,6 +104,7 @@ function Dashboard() {
             devices={sw?.devices ?? []}
             onClose={() => setSelectedSite(null)}
             onUpdated={() => { reload(); }}
+            onDeleted={() => { setSelectedSite(null); reload(); }}
             onAddDevice={(site) => { setSelectedSite(null); setAddForSite(site); setShowAdd(true); }}
           />
         );

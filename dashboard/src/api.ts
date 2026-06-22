@@ -75,6 +75,16 @@ export const api = {
   updateSite: (id: string, body: { name?: string; timezone?: string }) =>
     request<Site>('PATCH', `/v1/sites/${id}`, body),
 
+  deleteSite: (id: string) =>
+    fetch(`/v1/sites/${id}`, { method: 'DELETE', headers: authHeaders() }).then((r) => {
+      if (!r.ok && r.status !== 204) throw new Error(`${r.status} ${r.statusText}`);
+    }),
+
+  deleteDevice: (id: string) =>
+    fetch(`/v1/devices/${id}`, { method: 'DELETE', headers: authHeaders() }).then((r) => {
+      if (!r.ok && r.status !== 204) throw new Error(`${r.status} ${r.statusText}`);
+    }),
+
   testConnectivity: (body: {
     vendor: string;
     address: string;

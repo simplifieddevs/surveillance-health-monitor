@@ -8,6 +8,7 @@ interface Props {
   devices: Device[];
   onClose: () => void;
   onUpdated: () => void;
+  onDeleted: () => void;
   onAddDevice: (site: Site) => void;
 }
 
@@ -30,9 +31,11 @@ const inputStyle: React.CSSProperties = {
   outline: 'none',
 };
 
-export function SiteDetailPanel({ site, devices, onClose, onUpdated, onAddDevice }: Props) {
+export function SiteDetailPanel({ site, devices, onClose, onUpdated, onDeleted, onAddDevice }: Props) {
   const [editingSite, setEditingSite] = useState(false);
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
+  const [confirmDeleteSite, setConfirmDeleteSite] = useState(false);
+  const [deletingDevice, setDeletingDevice] = useState<string | null>(null);
 
   return (
     <div style={{
@@ -84,12 +87,27 @@ export function SiteDetailPanel({ site, devices, onClose, onUpdated, onAddDevice
             )}
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
-            {!editingSite && (
-              <IconBtn title="Edit site" onClick={() => setEditingSite(true)}>✏</IconBtn>
+            {!editingSite && !confirmDeleteSite && (
+              <>
+                <IconBtn title="Edit site" onClick={() => setEditingSite(true)}>✏</IconBtn>
+                <IconBtn title="Delete site" onClick={() => setConfirmDeleteSite(true)} danger>🗑</IconBtn>
+              </>
             )}
             <IconBtn title="Close" onClick={onClose}>×</IconBtn>
           </div>
         </div>
+
+        {/* confirm delete site */}
+        {confirmDeleteSite && (
+          <ConfirmDelete
+            message={`Delete site "${site.name}" and all its devices?`}
+            onConfirm={async () => {
+              await api.deleteSite(site.id);
+              onDeleted();
+            }}
+            onCancel={() => setConfirmDeleteSite(false)}
+          />
+        )}
 
         {/* devices section */}
         <div style={{ padding: '1rem 1.25rem', flex: 1 }}>
@@ -121,7 +139,18 @@ export function SiteDetailPanel({ site, devices, onClose, onUpdated, onAddDevice
               </div>
             )}
             {devices.map((d) =>
-              editingDeviceId === d.id ? (
+              deletingDevice === d.id ? (
+                <ConfirmDelete
+                  key={d.id}
+                  message={`Delete unit "${d.name}"?`}
+                  onConfirm={async () => {
+                    await api.deleteDevice(d.id);
+                    setDeletingDevice(null);
+                    onUpdated();
+                  }}
+                  onCancel={() => setDeletingDevice(null)}
+                />
+              ) : editingDeviceId === d.id ? (
                 <DeviceEditForm
                   key={d.id}
                   device={d}
@@ -133,6 +162,7 @@ export function SiteDetailPanel({ site, devices, onClose, onUpdated, onAddDevice
                   key={d.id}
                   device={d}
                   onEdit={() => setEditingDeviceId(d.id)}
+                  onDelete={() => setDeletingDevice(d.id)}
                 />
               )
             )}
@@ -188,7 +218,7 @@ function deviceWebUrl(device: Device): string {
   return `${scheme}://${addr}:${port}`;
 }
 
-function DeviceRow({ device, onEdit }: { device: Device; onEdit: () => void }) {
+function DeviceRow({ device, onEdit, onDelete }: { device: Device; onEdit: () => void; onDelete: () => void }) {
   const color = STATUS_COLOR[device.status];
   const symbol = STATUS_SYMBOL[device.status];
   const lastSeen = device.lastSeenAt ? timeAgo(new Date(device.lastSeenAt)) : 'never';
@@ -225,6 +255,12 @@ function DeviceRow({ device, onEdit }: { device: Device; onEdit: () => void }) {
           style={{ fontSize: '11px', color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 0.25rem' }}
         >
           ✏ Edit
+        </button>
+        <button
+          onClick={onDelete}
+          style={{ fontSize: '11px', color: 'var(--offline)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 0.25rem' }}
+        >
+          🗑
         </button>
       </div>
       <div style={{ fontSize: '12px', color: 'var(--muted)', paddingLeft: '1.25rem' }}>
@@ -331,16 +367,63 @@ function DeviceEditForm({ device, onSaved, onCancel }: { device: Device; onSaved
 
 /* ── Shared small components ─────────────────────────────── */
 
-function IconBtn({ onClick, title, children }: { onClick: () => void; title: string; children: React.ReactNode }) {
+function ConfirmDelete({ message, onConfirm, onCancel }: { message: string; onConfirm: () => Promise<void>; onCancel: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleConfirm() {
+    setBusy(true);
+    try {
+      await onConfirm();
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{
+      background: '#0a0c0f',
+      border: '1px solid var(--offline)',
+      borderRadius: '6px',
+      padding: '0.75rem 0.875rem',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '0.5rem',
+    }}>
+      <span style={{ fontSize: '12px', color: 'var(--text)' }}>{message}</span>
+      {error && <span style={{ fontSize: '11px', color: 'var(--offline)' }}>{error}</span>}
+      <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <button
+          onClick={handleConfirm}
+          disabled={busy}
+          style={{
+            padding: '0.35rem 0.875rem',
+            background: busy ? 'var(--border)' : 'var(--offline)',
+            border: 'none', borderRadius: '4px',
+            color: busy ? 'var(--muted)' : '#fff',
+            fontWeight: 700, fontSize: '12px',
+            cursor: busy ? 'default' : 'pointer',
+          }}
+        >
+          {busy ? 'Deleting…' : 'Delete'}
+        </button>
+        <CancelBtn onClick={onCancel} disabled={busy} />
+      </div>
+    </div>
+  );
+}
+
+function IconBtn({ onClick, title, children, danger }: { onClick: () => void; title: string; children: React.ReactNode; danger?: boolean }) {
   return (
     <button
       onClick={onClick}
       title={title}
       style={{
         background: 'none',
-        border: '1px solid var(--border)',
+        border: `1px solid ${danger ? 'var(--offline)' : 'var(--border)'}`,
         borderRadius: '5px',
-        color: 'var(--muted)',
+        color: danger ? 'var(--offline)' : 'var(--muted)',
         cursor: 'pointer',
         fontSize: '14px',
         width: '28px', height: '28px',

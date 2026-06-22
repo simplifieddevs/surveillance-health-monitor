@@ -37,6 +37,14 @@ export async function getSite(db: Db, ctx: TenantContext, id: string): Promise<S
   return { id: row.id, companyId: row.companyId, name: row.name, timezone: row.timezone };
 }
 
+export async function deleteSite(db: Db, ctx: TenantContext, id: string): Promise<void> {
+  const result = await db
+    .delete(sites)
+    .where(and(eq(sites.companyId, ctx.companyId), eq(sites.id, id)))
+    .returning({ id: sites.id });
+  if (result.length === 0) throw err.notFound("Site", id);
+}
+
 export interface UpdateSiteInput {
   name?: string;
   timezone?: string;

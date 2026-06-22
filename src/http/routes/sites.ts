@@ -2,7 +2,6 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { withTenantDb } from "../../db/client.js";
 import * as sitesRepo from "../../db/repositories/sites.js";
-
 import { err } from "../../core/errors.js";
 
 const CreateSiteBody = z.object({
@@ -46,5 +45,13 @@ export const sitesRoutes: FastifyPluginAsync = async (app) => {
     const { id } = IdParams.parse(req.params);
     const body = UpdateSiteBody.parse(req.body);
     return withTenantDb(ctx, (db) => sitesRepo.updateSite(db, ctx, id, body));
+  });
+
+  app.delete("/v1/sites/:id", async (req, reply) => {
+    const ctx = req.tenant;
+    if (!ctx) throw err.tenantRequired(req.id);
+    const { id } = IdParams.parse(req.params);
+    await withTenantDb(ctx, (db) => sitesRepo.deleteSite(db, ctx, id));
+    reply.code(204);
   });
 };

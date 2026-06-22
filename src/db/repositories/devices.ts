@@ -85,6 +85,14 @@ function toDevice(row: typeof devices.$inferSelect): Device {
   };
 }
 
+export async function deleteDevice(db: Db, ctx: TenantContext, id: string): Promise<void> {
+  const result = await db
+    .delete(devices)
+    .where(and(eq(devices.companyId, ctx.companyId), eq(devices.id, id)))
+    .returning({ id: devices.id });
+  if (result.length === 0) throw err.notFound("Device", id);
+}
+
 export interface UpdateDeviceInput {
   name?: string;
   address?: string;
