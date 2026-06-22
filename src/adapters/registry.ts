@@ -24,6 +24,7 @@ let factories: Record<Vendor, () => VendorAdapter> = {
   uniview: () => new UniviewTvtAdapter(),
   hanwha: () => new HanwhaSunapiAdapter(),
   axis: () => new AxisVapixAdapter(),
+  tvt: () => new UniviewTvtAdapter(),
 };
 
 /** Resolve a vendor to its adapter. Throws if unregistered. */
