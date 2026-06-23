@@ -141,8 +141,14 @@ function isOk(body: unknown): body is { Response: { ResponseCode: number; Data: 
 }
 
 function getData(body: unknown): unknown {
+  if (body === null) return null; // empty/no-content response; connection issues already logged by retry logic
   if (!isOk(body)) {
-    log.warn({ body: JSON.stringify(body)?.slice(0, 500) }, "uniview: unexpected response shape");
+    const code = (body as { Response?: { ResponseCode?: unknown } })?.Response?.ResponseCode;
+    if (code !== undefined && code !== 0) {
+      log.debug({ responseCode: code, body: JSON.stringify(body)?.slice(0, 200) }, "uniview: lapi error response");
+    } else {
+      log.warn({ body: JSON.stringify(body)?.slice(0, 500) }, "uniview: unexpected response shape");
+    }
     return null;
   }
   return (body as { Response: { Data: unknown } }).Response.Data;
