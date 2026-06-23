@@ -66,7 +66,7 @@ export function extractAllElements(
   const results: Array<{ attrs: string; content: string }> = [];
   let match: RegExpExecArray | null;
   while ((match = re.exec(xml)) !== null) {
-    results.push({ attrs: match[1] ?? "", content: match[2].trim() });
+    results.push({ attrs: match[1] ?? "", content: (match[2] ?? "").trim() });
   }
   return results;
 }
