@@ -64,7 +64,7 @@ export class PollingScheduler {
   /** Schedule a per-company tick that fires every minute. */
   async scheduleCompanyTick(companyId: string): Promise<void> {
     await this.tickQueue.add(
-      `tick:${companyId}`,
+      `tick-${companyId}`,
       { companyId },
       {
         repeat: { pattern: "* * * * *" }, // every minute
@@ -93,13 +93,13 @@ export class PollingScheduler {
       }
       for (const d of devices) {
         await this.pollQueue.add(
-          `poll:${d.id}`,
+          `poll-${d.id}`,
           { deviceId: d.id, companyId },
           {
             // Stable jobId per device: if a poll job for this device is
             // already waiting or active, BullMQ skips the add. Prevents
             // unbounded queue growth when polls take longer than one tick.
-            jobId: `poll:${d.id}`,
+            jobId: `poll-${d.id}`,
             removeOnComplete: 100,
             removeOnFail: 100,
             attempts: 3,
