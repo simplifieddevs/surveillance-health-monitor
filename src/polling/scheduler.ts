@@ -67,7 +67,6 @@ export class PollingScheduler {
       `tick:${companyId}`,
       { companyId },
       {
-        jobId: `tick:${companyId}`,
         repeat: { pattern: "* * * * *" }, // every minute
         removeOnComplete: 1000,
         removeOnFail: 1000,
