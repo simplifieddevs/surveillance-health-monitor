@@ -53,6 +53,12 @@ export class PollingScheduler {
       (job: Job<{ companyId: string }>) => this.runCompanyTick(job.data.companyId),
       { connection: conn, concurrency: 5 },
     );
+    this.tickWorker.on("failed", (job, err) =>
+      log.error({ jobId: job?.id, companyId: job?.data?.companyId, err: String(err) }, "tick job failed"),
+    );
+    this.tickWorker.on("error", (err) =>
+      log.error({ err: String(err) }, "tick worker error"),
+    );
   }
 
   /** Schedule a per-company tick that fires every minute. */
