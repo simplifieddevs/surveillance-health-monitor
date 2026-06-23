@@ -40,12 +40,19 @@ export interface SchedulerDeps {
 export class PollingScheduler {
   private readonly tickQueue: Queue;
   private readonly pollQueue: Queue;
+  private readonly tickWorker: Worker;
+
   constructor(private readonly deps: SchedulerDeps) {
     // BullMQ bundles its own copy of ioredis; the structural type still
     // matches at runtime. Cast through unknown to bridge the version split.
     const conn = deps.redis as unknown as ConnectionOptions;
     this.tickQueue = new Queue(COMPANY_TICK_QUEUE, { connection: conn });
     this.pollQueue = new Queue(POLL_QUEUE, { connection: conn });
+    this.tickWorker = new Worker(
+      COMPANY_TICK_QUEUE,
+      (job: Job<{ companyId: string }>) => this.runCompanyTick(job.data.companyId),
+      { connection: conn, concurrency: 5 },
+    );
   }
 
   /** Schedule a per-company tick that fires every minute. */
@@ -105,6 +112,7 @@ export class PollingScheduler {
   getTickQueue(): Queue { return this.tickQueue; }
 
   async close(): Promise<void> {
+    await this.tickWorker.close();
     await this.tickQueue.close();
     await this.pollQueue.close();
   }
