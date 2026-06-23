@@ -63,6 +63,15 @@ export class PollingScheduler {
 
   /** Schedule a per-company tick that fires every minute. */
   async scheduleCompanyTick(companyId: string): Promise<void> {
+    // Remove stale repeatable entries for this company before (re-)registering.
+    // BullMQ v5 accumulates a new entry on each boot rather than replacing,
+    // so without this cleanup each restart would add another duplicate tick.
+    const existing = await this.tickQueue.getRepeatableJobs();
+    for (const job of existing) {
+      if (job.name === `tick-${companyId}`) {
+        await this.tickQueue.removeRepeatableByKey(job.key);
+      }
+    }
     await this.tickQueue.add(
       `tick-${companyId}`,
       { companyId },
