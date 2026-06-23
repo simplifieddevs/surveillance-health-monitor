@@ -70,7 +70,9 @@ export class UniviewTvtAdapter extends BaseHTTPAdapter implements VendorAdapter 
     } catch (e) { log.warn({ address: target.address, err: String(e) }, "channel list failed"); }
 
     // ── 4. Alarm events (cursor-based) ───────────────────────────────────
-    let nextCursor = cursor;
+    // Cursor always advances to now so the next poll window is current.
+    // If alarm events return a more precise latestTime we use that instead.
+    let nextCursor = new Date().toISOString();
     try {
       const startTime = cursor
         ? isoToUnix(cursor)
@@ -88,8 +90,6 @@ export class UniviewTvtAdapter extends BaseHTTPAdapter implements VendorAdapter 
       events.push(...alarmEvents);
       if (latestTime) nextCursor = new Date(latestTime * 1000).toISOString();
     } catch (e) { log.warn({ address: target.address, err: String(e) }, "alarm events failed"); }
-
-    if (!nextCursor) nextCursor = new Date().toISOString();
 
     // ── 5. Time sync ─────────────────────────────────────────────────────
     try {
